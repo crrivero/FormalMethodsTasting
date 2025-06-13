@@ -2,7 +2,7 @@
 You can find a number of Jupyter notebooks for:
 
 - Mechanical engineering:
-[ ] TODO
++ [ ] TODO
 
 - Electrical engineering:
-[ ] TODO
++ [ ] TODO
