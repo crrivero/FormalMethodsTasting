@@ -2,10 +2,10 @@
 You can find a number of Jupyter notebooks for:
 
 - Biology:
-[ ] TODO
++ [ ] TODO
 
 - Ecology:
-[ ] TODO
++ [ ] TODO
 
 - Bioinformatics:
-[ ] TODO
++ [ ] TODO
