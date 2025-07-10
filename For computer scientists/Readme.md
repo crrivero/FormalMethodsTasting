@@ -9,3 +9,8 @@ You can find a number of Jupyter notebooks for:
 
 - Artificial intelligence:
   + [ ] TODO
+
+- Theory:
+  + Find maximum matching in a bipartite graph [link](MaxBipartiteMatching.ipynb)
+  + [ ] TODO Clique
+  
