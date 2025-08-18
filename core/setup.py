@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(
-    name="tofmcommon",
+    name="tofmcore",
     version="0.1",
-    py_modules=["tofmcommon"],
+    py_modules=["tofmcommon,tofmhelper"],
 )

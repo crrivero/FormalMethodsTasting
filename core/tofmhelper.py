@@ -1,0 +1,286 @@
+import re
+import matplotlib.pyplot as plt
+import networkx as nx
+import numpy as np
+
+### Generic Helpers
+
+def split_camel_case(s):
+    match = re.match(r'^([a-z]+|[A-Z][a-z]*)(.*)$', s)
+    if match:
+        return match.group(1), match.group(2)
+    else:
+        return s, ""  # if no split point found
+
+# min and max functions to use in Z3 constraints
+def maxZ3_3( z1, z2, z3 ):
+  return If( z1 >= z2, If( z1 >= z3, z1, z3 ), If( z2 >= z3, z2, z3 ) )
+
+def minZ3_3( z1, z2, z3 ):
+  return If( z1 <= z2, If( z1 <= z3, z1, z3 ), If( z2 <= z3, z2, z3 ) )
+
+def maxZ3_2( z1, z2 ):
+  return If( z1 >= z2, z1, z2 )
+
+def minZ3_2( z1, z2 ):
+  return If( z1 <= z2, z1, z2 )
+
+
+### Matching functions
+
+def draw_bipartite_graph(left_nodes, right_nodes, edges, matching=None):
+    """
+    Draws a bipartite graph with optional highlighting for matching edges.
+    Fixes cropping by adding margins and using tight layout.
+    """
+    # Normalize matching edges
+    matching_set = set(frozenset(e) for e in matching) if matching else set()
+
+    # Assign positions for a nice left-right layout
+    pos = {}
+    pos.update((node, (0, i)) for i, node in enumerate(sorted(left_nodes, reverse=True)))
+    pos.update((node, (1, i)) for i, node in enumerate(sorted(right_nodes, reverse=True)))
+
+    # Create graph
+    G = nx.Graph()
+    G.add_nodes_from(left_nodes)
+    G.add_nodes_from(right_nodes)
+    G.add_edges_from(edges)
+
+    # Separate edges
+    matching_edges = [tuple(e) for e in edges if frozenset(e) in matching_set]
+    non_matching_edges = [tuple(e) for e in edges if frozenset(e) not in matching_set]
+
+    plt.figure(figsize=(5, 5))  # slightly bigger than before
+
+    # Draw nodes
+    nx.draw_networkx_nodes(
+        G, pos,
+        node_color=["skyblue" if n in left_nodes else "lightgreen" for n in G.nodes()],
+        node_size=2000,
+        edgecolors='black'
+    )
+    nx.draw_networkx_labels(G, pos, font_size=9, font_weight="bold")
+
+    # Draw edges
+    nx.draw_networkx_edges(G, pos, edgelist=non_matching_edges, edge_color="gray", width=1.5)
+    if matching_edges:
+        nx.draw_networkx_edges(G, pos, edgelist=matching_edges, edge_color="red", width=3)
+
+    plt.axis("off")
+    plt.margins(0.2)   # add space around graph
+    plt.tight_layout()
+    plt.show()
+
+def print_matching_solution( solution ):
+  left_vertices = set({})
+  right_vertices = set({})
+  edges = []
+  matching = []
+  for i in solution:
+    val = solution[i]
+    a, b = split_camel_case( str(i) )
+    left_vertices.add( a )
+    right_vertices.add( b )
+    edges.append( (a,b) )
+    if ( val ):
+      matching.append( (a,b) )
+  draw_bipartite_graph( left_vertices, right_vertices, edges, matching )
+
+### Rooks
+
+def solToRookArray( N, sol ):
+  rook_array = np.zeros((N,N), dtype=int)
+  # to view the solution we have defined a speicla function
+  for i in range(1,N+1):
+    for j in range(1,N+1):
+      xij = Bool('x_{'+str(i)+str(j)+'}')
+      if ( sol[xij] ):
+        rook_array[i-1][j-1] = 1
+  return rook_array
+
+def draw_chessboard_with_rooks( N, sol ):
+    N = 3
+    rook_array = solToRookArray( N, sol )
+
+    # Create checkerboard pattern
+    chessboard = np.indices((N, N)).sum(axis=0) % 2
+
+    # Define RGB colors
+    light_gray = [1, 1, 1]  # RGB for light gray
+    dark_gray = [0.65, 0.65, 0.65]   # RGB for dark gray
+
+    # Build RGB board
+    rgb_board = np.zeros((N, N, 3))
+    for i in range(N):
+        for j in range(N):
+            rgb_board[i, j] = light_gray if chessboard[i, j] == 0 else dark_gray
+
+    plt.figure(figsize=(3, 3))
+    # Plot the board
+    plt.imshow(rgb_board, extent=[0, N, 0, N])
+    plt.xticks([])
+    plt.yticks([])
+    plt.gca().set_aspect('equal')
+
+    # Add rooks using Unicode ♖
+    for i in range(N):
+        for j in range(N):
+            if rook_array[i, j] == 1:
+                plt.text(j + 0.5, N - 1 - i + 0.4, '♖',
+                         fontsize=20 * (8 / N),  # Scale font for larger boards
+                         ha='center', va='center', color='black')
+
+    plt.show()
+
+def draw_multiple_chessboards_with_rooks(N, solutions, boards_per_row=3, board_size=3):
+    if ( len(solutions) > 24 ):
+      print("Too many solutions, only printing first 24")
+    sols = solutions[0:24]
+    rook_arrays = [ solToRookArray( N, sol ) for sol in sols ]
+    num_boards = len(rook_arrays)
+    rows = (num_boards + boards_per_row - 1) // boards_per_row
+
+    fig, axes = plt.subplots(rows, boards_per_row, figsize=(board_size * boards_per_row, board_size * rows))
+    axes = np.array(axes).reshape(-1)  # Flatten in case rows or cols = 1
+
+    for idx, rook_positions in enumerate(rook_arrays):
+        ax = axes[idx]
+        N = rook_positions.shape[0]
+        assert rook_positions.shape == (N, N), f"Board {idx} must be NxN"
+
+        # Create checkerboard pattern
+        chessboard = np.indices((N, N)).sum(axis=0) % 2
+
+        # Define RGB colors
+        light_gray = [1, 1, 1]
+        dark_gray = [0.65, 0.65, 0.65]
+
+        # Build RGB board
+        rgb_board = np.zeros((N, N, 3))
+        for i in range(N):
+            for j in range(N):
+                rgb_board[i, j] = light_gray if chessboard[i, j] == 0 else dark_gray
+
+        ax.imshow(rgb_board, extent=[0, N, 0, N])
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_aspect('equal')
+
+        # Add rooks
+        for i in range(N):
+            for j in range(N):
+                if rook_positions[i, j] == 1:
+                    ax.text(j + 0.5, N - 1 - i + 0.5, '♖',
+                            fontsize=20 * (8 / N),
+                            ha='center', va='center', color='black')
+
+    # Hide any unused subplots
+    for k in range(num_boards, len(axes)):
+        axes[k].axis('off')
+
+    plt.tight_layout()
+    plt.show()
+
+def rooks_output_string( all_solutions ):
+  return ''.join(sorted([ ''.join(''.join(str(cell) for cell in row) for row in solToRookArray( 4, sol )) for sol in all_solutions[:26] ]))
+
+
+### Arrowing
+
+def drawJ4 ( G ):
+  pos = { 0: (-1,1), 1: (1,1), 2: (1,-1), 3:(-1,-1) }
+  nx.draw_networkx_nodes(G, pos, G.nodes(), node_color="black", node_size=150)
+  nx.draw_networkx_labels(G, pos, font_size=10, font_color='white')
+  nx.draw_networkx_edges(G, pos,edgelist=G.edges(),width=5,alpha=0.7,edge_color="black")
+
+def drawG ( G ):
+  pos = { 0: (-3,2), 1: (-3,-2), 2: (0,1), 3:(-0.5,-1), 4:(0.5,-1), 5:(3,2), 6:(3,-2) }
+  nx.draw_networkx_nodes(G, pos, G.nodes(), node_color="black", node_size=150)
+  nx.draw_networkx_labels(G, pos, font_size=10, font_color='white')
+  sE = [(0,1), (5,6)]
+  rE = list(G.edges()).copy()
+  rE.remove( (0,1) )
+  rE.remove( (5,6) )
+  nx.draw_networkx_edges(G, pos,edgelist=sE,width=5,alpha=0.7,edge_color="black")
+  nx.draw_networkx_edges(G, pos,edgelist=rE,width=2,alpha=0.7,edge_color="black")
+
+def drawGandColoring( G, eMapInv, colorings, index ):
+  pos = { 0: (-3,2), 1: (-3,-2), 2: (0,1), 3:(-0.5,-1), 4:(0.5,-1), 5:(3,2), 6:(3,-2) }
+  nx.draw_networkx_nodes(G, pos, G.nodes(), node_color="black", node_size=150)
+  nx.draw_networkx_labels(G, pos, font_size=10, font_color='white')
+
+  bE = [ eMapInv[v.name()] for v in colorings[index] if ( colorings[index][v] == True ) ]
+  rE = [ eMapInv[v.name()] for v in colorings[index] if ( colorings[index][v] == False ) ]
+
+  nx.draw_networkx_edges(G, pos,edgelist=bE,width=3.5,alpha=0.7,edge_color="blue")
+  nx.draw_networkx_edges(G, pos,edgelist=rE,width=3.5,alpha=0.7,edge_color="red")
+
+
+### BST
+
+# Source: Joel from https://stackoverflow.com/questions/33439810/preserving-the-left-and-right-child-while-printing-python-graphs-using-networkx
+def binary_tree_layout(G, root, width=1., vert_gap = 0.2, vert_loc = 0, xcenter = 0.5,
+                  pos = None, parent = None):
+    '''If there is a cycle that is reachable from root, then this will see infinite recursion.
+       G: the graph
+       root: the root node of current branch
+       width: horizontal space allocated for this branch - avoids overlap with other branches
+       vert_gap: gap between levels of hierarchy
+       vert_loc: vertical location of root
+       xcenter: horizontal location of root
+       pos: a dict saying where all nodes go if they have been assigned
+       parent: parent of this branch.
+       each node has an attribute "left: or "right"'''
+    if pos == None:
+        pos = {root:(xcenter,vert_loc)}
+    else:
+        pos[root] = (xcenter, vert_loc)
+    neighbors = list(G.neighbors(root))
+    if parent != None:
+        neighbors.remove(parent)
+    if len(neighbors)!=0:
+        dx = width/2.
+        leftx = xcenter - dx/2
+        rightx = xcenter + dx/2
+        for neighbor in neighbors:
+            if G.nodes[neighbor]['child_status'] == 'left':
+                pos = binary_tree_layout(G,neighbor, width = dx, vert_gap = vert_gap,
+                                    vert_loc = vert_loc-vert_gap, xcenter=leftx, pos=pos,
+                    parent = root)
+            elif G.nodes[neighbor]['child_status'] == 'right':
+                pos = binary_tree_layout(G,neighbor, width = dx, vert_gap = vert_gap,
+                                    vert_loc = vert_loc-vert_gap, xcenter=rightx, pos=pos,
+                    parent = root)
+    return pos
+
+
+def printBST( B, verbose = False ):
+  G = nx.Graph()
+
+  queue = [B.root]
+  G.add_node(B.root.ID)
+  while len(queue) > 0:
+    current_node = queue.pop()
+    G.nodes[current_node.ID]['value'] = current_node.value
+    if ( verbose ):
+      G.nodes[current_node.ID]['IDV'] = (current_node.ID, current_node.value)
+    if current_node.left != None:
+      G.add_edge( current_node.ID, current_node.left.ID)
+      G.nodes[current_node.left.ID]['child_status'] = 'left'
+      queue.append(current_node.left)
+    if current_node.right != None:
+      G.add_edge( current_node.ID, current_node.right.ID)
+      G.nodes[current_node.right.ID]['child_status'] = 'right'
+      queue.append(current_node.right)
+
+  pos = binary_tree_layout( G, B.root.ID )
+  # nodes
+  options = {"node_size": 300, "alpha": 0.9}
+  nx.draw_networkx_nodes(G, pos, node_color="#bbb", **options)
+  nx.draw_networkx_edges(G, pos, width=2.0, arrows=True)
+  if ( verbose ):
+    nx.draw_networkx_labels(G, pos, labels=nx.get_node_attributes(G,'IDV'), font_size=12)
+  else:
+    nx.draw_networkx_labels(G, pos, labels=nx.get_node_attributes(G,'value'), font_size=12)
+
