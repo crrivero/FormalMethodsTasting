@@ -340,10 +340,9 @@ def printBST( B, verbose = False ):
   else:
     nx.draw_networkx_labels(G, pos, labels=nx.get_node_attributes(G,'value'), font_size=12)
 
+### CLIQUE 
 
-### PPI CLIQUE
-
-def visualize_ppi_network(edges, clique=[]):
+def visualize_graph(edges, clique=[]):
     G = nx.Graph()
     G.add_edges_from(edges)
     pos = nx.spring_layout(G, seed=42)
@@ -355,10 +354,29 @@ def visualize_ppi_network(edges, clique=[]):
     # Layout and draw
     nx.draw(G, pos, with_labels=True, node_color=node_colors, edge_color=edge_colors,
         node_size=1200, font_size=10, width=2)
-    if ( clique != [] ):
-      plt.title("PPI Network with Clique Highlighted")
     plt.show()
 
+def visualize_clique_solution( edges, solution ):
+    clique = [v for v in proteins if is_true(solution[v])]
+    visualize_graph(edges, clique)
+
+### PPI CLIQUE
+
+def visualize_ppi_network(edges, clique=[]):
+    visualize_graph(edges, clique)
+
 def visualize_ppi_solution( edges, solution ):
-  clique = [v for v in proteins if is_true(solution[v])]
-  visualize_ppi_network(edges, clique)
+    visualize_clique_solution( edges, solution )
+
+
+### COMPATIBLE COMPONENT CLIQUE
+
+def visualize_compatible_components(edges, clique=[]):
+    visualize_graph(edges, clique)
+
+def visualize_compatible_components_solution( edges, solution ):
+    visualize_clique_solution( edges, solution )
+
+
+
+
