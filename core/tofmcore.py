@@ -340,3 +340,25 @@ def printBST( B, verbose = False ):
   else:
     nx.draw_networkx_labels(G, pos, labels=nx.get_node_attributes(G,'value'), font_size=12)
 
+
+### PPI CLIQUE
+
+def visualize_ppi_network(edges, clique=[]):
+    G = nx.Graph()
+    G.add_edges_from(edges)
+    pos = nx.spring_layout(G, seed=42)
+
+    # Set colors
+    node_colors = ["lightcoral" if n in clique else "skyblue" for n in G.nodes()]
+    edge_colors = ["red" if u in clique and v in clique else "gray" for u, v in G.edges()]
+
+    # Layout and draw
+    nx.draw(G, pos, with_labels=True, node_color=node_colors, edge_color=edge_colors,
+        node_size=1200, font_size=10, width=2)
+    if ( clique != [] ):
+      plt.title("PPI Network with Clique Highlighted")
+    plt.show()
+
+def visualize_ppi_solution( edges, solution ):
+  clique = [v for v in proteins if is_true(solution[v])]
+  visualize_ppi_network(edges, clique)
