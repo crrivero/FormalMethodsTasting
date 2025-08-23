@@ -342,7 +342,7 @@ def printBST( B, verbose = False ):
 
 ### CLIQUE 
 
-def visualize_graph(edges, clique=[]):
+def visualize_graph( edges, clique=[] ):
     G = nx.Graph()
     G.add_edges_from(edges)
     pos = nx.spring_layout(G, seed=42)
@@ -358,12 +358,12 @@ def visualize_graph(edges, clique=[]):
 
 def visualize_clique_solution( edges, solution ):
     verts = set([ e[0] for e in edges ]).union( [e[1] for e in edges] )
-    clique = [v for v in solution if is_true(solution[v])]
+    clique = [v for v in verts if is_true(solution[v])]
     visualize_graph(edges, clique)
 
 ### PPI CLIQUE
 
-def visualize_ppi_network(edges, clique=[]):
+def visualize_ppi_network( edges, clique=[] ):
     visualize_graph(edges, clique)
 
 def visualize_ppi_solution( edges, solution ):
