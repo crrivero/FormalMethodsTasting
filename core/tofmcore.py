@@ -357,6 +357,7 @@ def visualize_graph(edges, clique=[]):
     plt.show()
 
 def visualize_clique_solution( edges, solution ):
+    verts = set([ e[0] for e in edges ]).union( [e[1] for e in edges] )
     clique = [v for v in solution if is_true(solution[v])]
     visualize_graph(edges, clique)
 
