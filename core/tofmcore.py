@@ -357,7 +357,7 @@ def visualize_graph(edges, clique=[]):
     plt.show()
 
 def visualize_clique_solution( edges, solution ):
-    clique = [v for v in proteins if is_true(solution[v])]
+    clique = [v for v in solution if is_true(solution[v])]
     visualize_graph(edges, clique)
 
 ### PPI CLIQUE
