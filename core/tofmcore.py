@@ -13,7 +13,8 @@ html_to_latex_dict = {
   r"&ge;": r" \geq ",
   r"&ne;": r" \not= ",
   r"&middot;": r" \cdot ",
-  r"<sub>u</sub>": r"_u",
+  r"&exist;": r" \exists ",
+  r"&forall;": r" \forall ",
 }
 html_to_latex_dict_pattern = re.compile("|".join(map(re.escape, html_to_latex_dict.keys())))
 
