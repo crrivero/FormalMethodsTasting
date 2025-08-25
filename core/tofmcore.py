@@ -20,7 +20,8 @@ html_to_latex_dict_pattern = re.compile("|".join(map(re.escape, html_to_latex_di
 
 def HTMLtoLaTeX( s ):
   s2 = re.sub(r"If\((.*?), 1, 0\)", r'\1', s)
-  return html_to_latex_dict_pattern.sub(lambda m: html_to_latex_dict[m.group(0)], s2)
+  s3 = re.sub(r"<sup>(.*?)</sup>", r'^\1', s2)
+  return html_to_latex_dict_pattern.sub(lambda m: html_to_latex_dict[m.group(0)], s3)
 
 def showSolver( solver ):
   set_pp_option("html_mode", True)
