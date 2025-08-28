@@ -469,7 +469,7 @@ def plot_f_vs_cg(f_expr, g_expr, var, c, n0, width=5, num_points=400, figsize=(8
     ax.legend()
     plt.show()
 
-def bigOPlot( f, g, makeBigOSolver=makeBigOSolver ):
+def bigOPlot( f, g, makeBigOSolver ):
   s = makeBigOSolver( f, g )
   if ( s.check() == sat ):
     sol = s.model()
@@ -481,7 +481,7 @@ def bigOPlot( f, g, makeBigOSolver=makeBigOSolver ):
     print( "f(n) =/= O(g(n))" )
 
 
-def bigOmegaPlot( f, g, makeBigOmegaSolver=makeBigOmegaSolver ):
+def bigOmegaPlot( f, g, makeBigOmegaSolver ):
   s = makeBigOmegaSolver( f, g )
   if ( s.check() == sat ):
     sol = s.model()
