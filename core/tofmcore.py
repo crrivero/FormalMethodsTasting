@@ -475,7 +475,7 @@ def bigOPlot( f, g, makeBigOSolver ):
     sol = s.model()
     c = Real('c')
     n0 = Real('n_0')
-    
+    n = Real('n')
     plot_f_vs_cg(f, g, n, sol[c], sol[n0], width = 1)
   else:
     print( "f(n) =/= O(g(n))" )
@@ -487,7 +487,7 @@ def bigOmegaPlot( f, g, makeBigOmegaSolver ):
     sol = s.model()
     c = Real('c')
     n0 = Real('n_0')
-    
+    n = Real('n')
     plot_f_vs_cg(f, g, n, sol[c], sol[n0], width = 1)
   else:
     print( "f(n) =/= Omega(g(n))" )
