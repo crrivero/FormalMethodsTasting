@@ -380,6 +380,116 @@ def visualize_compatible_components(edges, clique=[]):
 def visualize_compatible_components_solution( edges, solution ):
     visualize_clique_solution( edges, solution )
 
+### BIG O
 
+import math
+from fractions import Fraction
+import numpy as np
+import matplotlib.pyplot as plt
+from z3 import *
+
+def _z3_value_to_float(zv):
+    """Convert a Z3 numeric value to float if possible."""
+    if zv is None:
+        return None
+    if isinstance(zv, (int, float)):
+        return float(zv)
+    try:
+        if hasattr(zv, "numerator_as_long") and hasattr(zv, "denominator_as_long"):
+            return zv.numerator_as_long() / zv.denominator_as_long()
+        s = zv.as_decimal(30)
+        if s.endswith('?'):
+            s = s[:-1]
+        try:
+            return float(Fraction(s))
+        except Exception:
+            return float(s)
+    except Exception:
+        try:
+            return float(Fraction(str(zv)))
+        except Exception:
+            return None
+
+def plot_f_vs_cg(f_expr, g_expr, var, c, n0, width=5, num_points=400, figsize=(8,5)):
+    """
+    Plot f(n) vs c*g(n), centered at n0, with a marker showing if c*g(n0) >= f(n0).
+    Works whether c and n0 are Python numbers or Z3 model values.
+    """
+    # Ensure c and n0 are floats
+    c_val = _z3_value_to_float(c)
+    n0_val = _z3_value_to_float(n0)
+    if c_val is None or n0_val is None:
+        raise ValueError("Could not convert c or n0 to numeric values.")
+
+    xmin, xmax = n0_val - width, n0_val + width
+    xs = np.linspace(xmin, xmax, num_points)
+
+    ys_f, ys_cg, xs_valid = [], [], []
+
+    sort = var.sort()
+    is_real = (sort.name() == 'Real')
+    is_int = (sort.name() == 'Int')
+
+    for xv in xs:
+        try:
+            z_x = IntVal(int(round(xv))) if is_int else RealVal(str(float(xv)))
+            rf = simplify(substitute(f_expr, (var, z_x)))
+            rg = simplify(substitute(g_expr, (var, z_x)))
+            f_val = _z3_value_to_float(rf)
+            g_val = _z3_value_to_float(rg)
+            cg_val = None if g_val is None else c_val * g_val
+
+            if (f_val is not None and cg_val is not None and
+                not (math.isinf(f_val) or math.isnan(f_val)) and
+                not (math.isinf(cg_val) or math.isnan(cg_val))):
+                xs_valid.append(xv)
+                ys_f.append(f_val)
+                ys_cg.append(cg_val)
+        except Exception:
+            pass
+
+    # Evaluate at n0
+    z_n0 = IntVal(int(round(n0_val))) if is_int else RealVal(str(float(n0_val)))
+    f_n0 = _z3_value_to_float(simplify(substitute(f_expr, (var, z_n0))))
+    g_n0 = _z3_value_to_float(simplify(substitute(g_expr, (var, z_n0))))
+    cg_n0 = None if g_n0 is None else c_val * g_n0
+
+    holds = (cg_n0 is not None and f_n0 is not None and cg_n0 >= f_n0)
+
+    # Plot
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.plot(xs_valid, ys_f, label=str(f_expr))
+    ax.plot(xs_valid, ys_cg, label=f"{c_val}·("+str(g_expr)+")")
+    ax.axvline(n0_val, color='red', linestyle='--', linewidth=1, label=f"n = n0 = {n0_val}")
+
+    ax.set_xlabel("n")
+    ax.set_xlim(xmin, xmax)
+    ax.set_title( "c = " + str(c_val) + ", n0 = " + str(n0_val) )
+    ax.grid(True)
+    ax.legend()
+    plt.show()
+
+def bigOPlot( f, g ):
+  s = makeBigOSolver( f, g )
+  if ( s.check() == sat ):
+    sol = s.model()
+    c = Real('c')
+    n0 = Real('n_0')
+    
+    plot_f_vs_cg(f, g, n, sol[c], sol[n0], width = 1)
+  else:
+    print( "f(n) =/= O(g(n))" )
+
+
+def bigOmegaPlot( f, g ):
+  s = makeBigOmegaSolver( f, g )
+  if ( s.check() == sat ):
+    sol = s.model()
+    c = Real('c')
+    n0 = Real('n_0')
+    
+    plot_f_vs_cg(f, g, n, sol[c], sol[n0], width = 1)
+  else:
+    print( "f(n) =/= Omega(g(n))" )
 
 
