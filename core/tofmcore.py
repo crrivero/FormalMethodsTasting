@@ -18,6 +18,7 @@ html_to_latex_dict = {
 }
 html_to_latex_dict_pattern = re.compile("|".join(map(re.escape, html_to_latex_dict.keys())))
 
+# This function was written with the help of ChatGPT
 def HTMLtoLaTeX( s ):
   s2 = re.sub(r"If\((.*?), 1, 0\)", r'\1', s)
   s3 = re.sub(r"<sup>(.*?)</sup>", r'^\1', s2)
@@ -63,6 +64,7 @@ import numpy as np
 
 ### Generic Helpers
 
+# This function was written with the help of ChatGPT
 def split_camel_case(s):
     match = re.match(r'^([a-z]+|[A-Z][a-z]*)(.*)$', s)
     if match:
@@ -86,6 +88,7 @@ def minZ3_2( z1, z2 ):
 
 ### Matching functions
 
+# This function was written using ChatGPT
 def draw_bipartite_graph(left_nodes, right_nodes, edges, matching=None):
     """
     Draws a bipartite graph with optional highlighting for matching edges.
@@ -130,6 +133,7 @@ def draw_bipartite_graph(left_nodes, right_nodes, edges, matching=None):
     plt.tight_layout()
     plt.show()
 
+# This function was written with the help of ChatGPT
 def print_matching_solution( solution ):
   left_vertices = set({})
   right_vertices = set({})
@@ -149,7 +153,7 @@ def print_matching_solution( solution ):
 
 def solToRookArray( N, sol ):
   rook_array = np.zeros((N,N), dtype=int)
-  # to view the solution we have defined a speicla function
+  # to view the solution we have defined a speical function
   for i in range(1,N+1):
     for j in range(1,N+1):
       xij = Bool('x_{'+str(i)+str(j)+'}')
@@ -157,6 +161,7 @@ def solToRookArray( N, sol ):
         rook_array[i-1][j-1] = 1
   return rook_array
 
+# This function was written using ChatGPT
 def draw_chessboard_with_rooks( N, sol ):
     N = 3
     rook_array = solToRookArray( N, sol )
@@ -191,6 +196,7 @@ def draw_chessboard_with_rooks( N, sol ):
 
     plt.show()
 
+# This function was written using ChatGPT
 def draw_multiple_chessboards_with_rooks(N, solutions, boards_per_row=3, board_size=3):
     if ( len(solutions) > 24 ):
       print("Too many solutions, only printing first 24")
@@ -344,6 +350,7 @@ def printBST( B, verbose = False ):
 
 ### CLIQUE 
 
+# This function was written using ChatGPT
 def visualize_graph( edges, clique=[] ):
     G = nx.Graph()
     G.add_edges_from(edges)
@@ -388,6 +395,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from z3 import *
 
+# This function was written using ChatGPT
 def _z3_value_to_float(zv):
     """Convert a Z3 numeric value to float if possible."""
     if zv is None:
@@ -410,6 +418,7 @@ def _z3_value_to_float(zv):
         except Exception:
             return None
 
+# This function was written using ChatGPT
 def plot_f_vs_cg(f_expr, g_expr, var, c, n0, width=5, num_points=400, figsize=(8,5)):
     """
     Plot f(n) vs c*g(n), centered at n0, with a marker showing if c*g(n0) >= f(n0).
@@ -469,6 +478,7 @@ def plot_f_vs_cg(f_expr, g_expr, var, c, n0, width=5, num_points=400, figsize=(8
     ax.legend()
     plt.show()
 
+# This function was written with the help of ChatGPT
 def bigOPlot( f, g, makeBigOSolver ):
   s = makeBigOSolver( f, g )
   if ( s.check() == sat ):
