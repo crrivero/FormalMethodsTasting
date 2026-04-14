@@ -503,3 +503,52 @@ def bigOmegaPlot( f, g, makeBigOmegaSolver ):
     print( "f(n) =/= Omega(g(n))" )
 
 
+import matplotlib.pyplot as plt
+# written using chatgpt
+def visualize_truss_solution( solution ):
+  # 1. Extract values as Python floats for plotting
+  f_AB = float(solution[T_AB].as_fraction())
+  f_AC = float(solution[T_AC].as_fraction())
+  f_BC = float(solution[T_BC].as_fraction())
+
+  # 2. Define geometry
+  joints = {'A': (0, 0), 'B': (3, 0), 'C': (0, 4)}
+  members = [('A', 'B', f_AB), ('A', 'C', f_AC), ('B', 'C', f_BC)]
+
+  # 3. Setup Plot
+  fig, ax = plt.subplots(figsize=(6, 6))
+  ax.set_aspect('equal')
+  ax.axis('off')
+
+  # 4. Plot Members
+  max_force = max(abs(f_AB), abs(f_AC), abs(f_BC))
+  for node1, node2, force in members:
+    x_values = [joints[node1][0], joints[node2][0]]
+    y_values = [joints[node1][1], joints[node2][1]]
+
+    # Color: Blue for Tension (+), Red for Compression (-)
+    color = 'blue' if force > 0 else 'red'
+
+    # Thickness proportional to magnitude
+    thickness = 1 + 5 * (abs(force) / max_force)
+
+    ax.plot(x_values, y_values, color=color, linewidth=thickness, zorder=1)
+
+    # Add force label in the middle of the member
+    mid_x = sum(x_values) / 2
+    mid_y = sum(y_values) / 2
+    ax.text(mid_x, mid_y, f"{abs(force):.1f} N",
+            ha='center', va='center', bbox=dict(facecolor='white', edgecolor='none', alpha=0.7))
+
+  # 5. Plot Joints
+  for name, (x, y) in joints.items():
+    ax.plot(x, y, 'ko', markersize=10, zorder=2) # Black dots for joints
+    ax.text(x - 0.2, y + 0.2, name, fontsize=12, fontweight='bold')
+
+  # 6. Add Custom Legend
+  ax.plot([], [], color='blue', linewidth=3, label='Tension')
+  ax.plot([], [], color='red', linewidth=3, label='Compression')
+  ax.legend(loc='upper right')
+
+  plt.title("Truss Internal Forces Visualization", fontsize=14)
+  plt.show()
