@@ -505,11 +505,7 @@ def bigOmegaPlot( f, g, makeBigOmegaSolver ):
 
 import matplotlib.pyplot as plt
 # written using gemini
-def visualize_truss_solution( solution ):
-  # 1. Extract values as Python floats for plotting
-  f_AB = float(solution[T_AB].as_fraction())
-  f_AC = float(solution[T_AC].as_fraction())
-  f_BC = float(solution[T_BC].as_fraction())
+def visualize_truss_solution( f_AB, f_AC, f_BC ):
 
   # 2. Define geometry
   joints = {'A': (0, 0), 'B': (3, 0), 'C': (0, 4)}
