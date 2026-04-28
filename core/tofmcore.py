@@ -504,7 +504,7 @@ def bigOmegaPlot( f, g, makeBigOmegaSolver ):
 
 
 import matplotlib.pyplot as plt
-# written using chatgpt
+# written using gemini
 def visualize_truss_solution( solution ):
   # 1. Extract values as Python floats for plotting
   f_AB = float(solution[T_AB].as_fraction())
@@ -552,3 +552,37 @@ def visualize_truss_solution( solution ):
 
   plt.title("Truss Internal Forces Visualization", fontsize=14)
   plt.show()
+
+
+
+# written using gemini
+def plot_gears(n1, n2, n3, n4):
+    fig, ax = plt.subplots(figsize=(10, 5))
+    
+    # Centers (Stage 1)
+    c1 = (0, 0)
+    r1 = n1 / 2
+    c2 = (r1 + n2/2, 0)
+    r2 = n2 / 2
+    
+    # Centers (Stage 2 - Shaft 2 is shared)
+    c3 = c2
+    r3 = n3 / 2
+    c4 = (c2[0] + r3 + n4/2, 0)
+    r4 = n4 / 2
+    
+    # Draw Pitch Circles
+    gears = [(c1, r1, 'Input (N1)'), (c2, r2, 'N2'), (c3, r3, 'N3'), (c4, r4, 'Output (N4)')]
+    colors = ['#3498db', '#e74c3c', '#f1c40f', '#2ecc71']
+    
+    for i, (pos, rad, label) in enumerate(gears):
+        circle = plt.Circle(pos, rad, color=colors[i], alpha=0.6, label=f"{label}: {int(rad*2)}T")
+        ax.add_artist(circle)
+        
+    ax.set_xlim(-r1 - 5, c4[0] + r4 + 5)
+    ax.set_ylim(-max(r2, r4) - 5, max(r2, r4) + 5)
+    ax.set_aspect('equal')
+    plt.title("Powertrain Layout: Compound Spur Gear Train")
+    plt.legend()
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.show()
