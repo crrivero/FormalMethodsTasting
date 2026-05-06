@@ -666,6 +666,546 @@ def draw_lewis_structure(elements, bonds, lone_pairs):
                 dx = x + dist * np.cos(slot_angle) + side * dot_gap * np.sin(slot_angle)
                 dy = y + dist * np.sin(slot_angle) - side * dot_gap * np.cos(slot_angle)
                 ax.scatter(dx, dy, s=40, color='red', zorder=3)  # Red for visibility
+### Install Problem, all basically written by ChatGPT
+
+# These two are from the Z3 article
+
+
+def DependsOn(pack, deps):
+    if is_expr(
+        deps
+    ):  # Allows us to do something like DependsOn(a, b) instead of DependsOn(a, [b])
+        return Implies(pack, deps)
+    else:
+        return And([Implies(pack, dep) for dep in deps])
+
+
+def Conflict(p1, p2):
+    return Or(Not(p1), Not(p2))
+
+
+def display_pkg_struct(
+    solver_or_exprs,
+    *,
+    name="PkgGraph",
+    rankdir="TB",
+    fontname="Liberation Serif",
+    fontsize=28,
+    nodesep="0.7",
+    ranksep="0.8",
+):
+    """
+    Visual encoding:
+      - blue box = explicitly requested package
+      - black box = normal package
+      - black arrows = dependencies
+      - black dot = OR dependency
+      - red double arrow = conflict
+
+    Written by ChatGPT
+    """
+
+    # Normalize input
+    if isinstance(solver_or_exprs, Solver):
+        assertions = list(solver_or_exprs.assertions())
+    else:
+        assertions = list(solver_or_exprs)
+
+    dot = Digraph(name)
+    dot.attr(
+        rankdir=rankdir, splines="true", nodesep=str(nodesep), ranksep=str(ranksep)
+    )
+
+    dot.attr("edge", penwidth="2", arrowsize="0.9")
+
+    # ----------------------------
+    # Helpers
+    # ----------------------------
+
+    def is_atom_bool(e):
+        return is_app(e) and e.num_args() == 0
+
+    def kind(e):
+        return e.decl().kind() if is_app(e) else None
+
+    def flatten(e, op_kind):
+        if is_app(e) and kind(e) == op_kind:
+            out = []
+            for ch in e.children():
+                out.extend(flatten(ch, op_kind))
+            return out
+        return [e]
+
+    def get_not_atom(e):
+        if is_app(e) and kind(e) == Z3_OP_NOT:
+            x = e.arg(0)
+            if is_atom_bool(x):
+                return x
+        return None
+
+    # ----------------------------
+    # Collect graph data
+    # ----------------------------
+
+    pkgs = set()
+    requested = set()
+    dep_edges = set()
+    or_groups = []
+    conflict_pairs = set()
+
+    def ensure_pkg(atom):
+        pkgs.add(str(atom))
+
+    def consume_dep(pack, rhs):
+        ensure_pkg(pack)
+
+        # AND deps
+        if is_app(rhs) and kind(rhs) == Z3_OP_AND:
+            for term in flatten(rhs, Z3_OP_AND):
+                consume_dep(pack, term)
+            return
+
+        # OR deps
+        if is_app(rhs) and kind(rhs) == Z3_OP_OR:
+            opts = []
+            for term in flatten(rhs, Z3_OP_OR):
+                if is_atom_bool(term):
+                    ensure_pkg(term)
+                    opts.append(str(term))
+            if opts:
+                or_groups.append((str(pack), opts))
+            return
+
+        # single dep
+        if is_atom_bool(rhs):
+            ensure_pkg(rhs)
+            dep_edges.add((str(pack), str(rhs)))
+
+    def consume_expr(e):
+
+        # ⭐ REQUESTED PACKAGE DETECTION
+        if is_atom_bool(e):
+            ensure_pkg(e)
+            requested.add(str(e))
+            return
+
+        if is_app(e) and kind(e) == Z3_OP_AND:
+            for term in flatten(e, Z3_OP_AND):
+                consume_expr(term)
+            return
+
+        if is_app(e) and kind(e) == Z3_OP_IMPLIES:
+            lhs, rhs = e.arg(0), e.arg(1)
+            if is_atom_bool(lhs):
+                consume_dep(lhs, rhs)
+            return
+
+        # conflicts
+        if is_app(e) and kind(e) == Z3_OP_OR:
+            terms = flatten(e, Z3_OP_OR)
+            negs = [get_not_atom(t) for t in terms]
+            if all(n is not None for n in negs) and len(negs) >= 2:
+                names = []
+                for n in negs:
+                    ensure_pkg(n)
+                    names.append(str(n))
+
+                for i in range(len(names)):
+                    for j in range(i + 1, len(names)):
+                        conflict_pairs.add(frozenset((names[i], names[j])))
+
+    for a in assertions:
+        consume_expr(a)
+
+    # ----------------------------
+    # Emit nodes
+    # ----------------------------
+
+    dot.attr(
+        "node",
+        shape="box",
+        fontsize=str(fontsize),
+        fontname=fontname,
+        penwidth="2",
+        style="filled",
+    )
+
+    for p in sorted(pkgs):
+        if p in requested:
+            dot.node(p, p, fillcolor="#4DA3FF")  # nice blue
+        else:
+            dot.node(p, p, fillcolor="white")
+
+    # dependencies
+    for u, v in dep_edges:
+        dot.edge(u, v)
+
+    # OR dots
+    dot.attr("node", shape="point", width="0.12", height="0.12")
+    for i, (pack, opts) in enumerate(or_groups, 1):
+        j = f"j{i}"
+        dot.node(j, "")
+        dot.edge(pack, j)
+        for o in opts:
+            dot.edge(j, o)
+
+    # conflicts
+    for pair in conflict_pairs:
+        a, b = sorted(list(pair))
+        dot.edge(a, b, dir="both", color="red", style="dashed", penwidth="2.5")
+
+    return dot
+
+
+def display_pkg_solution(
+    solver_or_exprs,
+    *,
+    model=None,
+    name="PkgGraph",
+    rankdir="TB",
+):
+    """
+    Coloring priority:
+
+        requested  -> BLUE
+        true       -> GREEN
+        false      -> white
+        undefined  -> gray
+
+    Written by ChatGPT
+    """
+
+    if isinstance(solver_or_exprs, Solver):
+        if solver_or_exprs.check() == unsat:
+            print("No satisfying installation profile found!")
+            return
+        model = solver_or_exprs.model()
+        assertions = list(solver_or_exprs.assertions())
+    else:
+        assertions = list(solver_or_exprs)
+
+    dot = Digraph(name)
+    dot.attr(rankdir=rankdir, splines="true", nodesep="0.7", ranksep="0.8")
+
+    dot.attr("edge", penwidth="2", arrowsize="0.9")
+
+    # -------------------------
+    # Helpers
+    # -------------------------
+
+    def is_atom(e):
+        return is_app(e) and e.num_args() == 0
+
+    def kind(e):
+        return e.decl().kind() if is_app(e) else None
+
+    def flatten(e, op):
+        if is_app(e) and kind(e) == op:
+            out = []
+            for c in e.children():
+                out.extend(flatten(c, op))
+            return out
+        return [e]
+
+    def get_not_atom(e):
+        if is_app(e) and kind(e) == Z3_OP_NOT:
+            x = e.arg(0)
+            if is_atom(x):
+                return x
+        return None
+
+    def model_val(atom):
+        try:
+            v = model.eval(atom, model_completion=False)
+        except:
+            return None
+
+        if v is None:
+            return None
+        if v.eq(BoolVal(True)):
+            return True
+        if v.eq(BoolVal(False)):
+            return False
+        return None
+
+    # -------------------------
+    # Collect graph data
+    # -------------------------
+
+    pkgs = {}
+    requested = set()
+    deps = set()
+    or_groups = []
+    conflicts = set()
+
+    def ensure(atom):
+        pkgs[str(atom)] = atom
+
+    def consume_dep(pack, rhs):
+        ensure(pack)
+
+        if is_app(rhs) and kind(rhs) == Z3_OP_AND:
+            for t in flatten(rhs, Z3_OP_AND):
+                consume_dep(pack, t)
+            return
+
+        if is_app(rhs) and kind(rhs) == Z3_OP_OR:
+            opts = []
+            for t in flatten(rhs, Z3_OP_OR):
+                if is_atom(t):
+                    ensure(t)
+                    opts.append(str(t))
+            if opts:
+                or_groups.append((str(pack), opts))
+            return
+
+        if is_atom(rhs):
+            ensure(rhs)
+            deps.add((str(pack), str(rhs)))
+
+    def consume_expr(e):
+
+        # requested package
+        if is_atom(e):
+            ensure(e)
+            requested.add(str(e))
+            return
+
+        if is_app(e) and kind(e) == Z3_OP_AND:
+            for t in flatten(e, Z3_OP_AND):
+                consume_expr(t)
+            return
+
+        if is_app(e) and kind(e) == Z3_OP_IMPLIES:
+            lhs, rhs = e.arg(0), e.arg(1)
+            if is_atom(lhs):
+                consume_dep(lhs, rhs)
+            return
+
+        if is_app(e) and kind(e) == Z3_OP_OR:
+            terms = flatten(e, Z3_OP_OR)
+            negs = [get_not_atom(t) for t in terms]
+
+            if all(n is not None for n in negs) and len(negs) >= 2:
+                names = []
+                for n in negs:
+                    ensure(n)
+                    names.append(str(n))
+
+                for i in range(len(names)):
+                    for j in range(i + 1, len(names)):
+                        conflicts.add(frozenset((names[i], names[j])))
+
+    for a in assertions:
+        consume_expr(a)
+
+    # -------------------------
+    # Emit nodes with PRIORITY
+    # -------------------------
+
+    dot.attr(
+        "node",
+        shape="box",
+        style="filled",
+        penwidth="2",
+        fontname="Liberation Serif",
+        fontsize="28",
+    )
+
+    for name, atom in pkgs.items():
+
+        if name in requested:
+            fill = "#4DA3FF"  # BLUE (highest priority)
+
+        else:
+            mv = model_val(atom)
+
+            if mv is True:
+                fill = "#7CFC90"  # GREEN
+            elif mv is False:
+                fill = "white"
+            else:
+                fill = "#E8E8E8"
+
+        dot.node(name, name, fillcolor=fill)
+
+    # dependencies
+    for u, v in deps:
+        dot.edge(u, v)
+
+    # OR dots
+    dot.attr("node", shape="point", width="0.12", height="0.12")
+    for i, (pack, opts) in enumerate(or_groups, 1):
+        j = f"j{i}"
+        dot.node(j, "")
+        dot.edge(pack, j)
+        for o in opts:
+            dot.edge(j, o)
+
+    # conflicts
+    for pair in conflicts:
+        a, b = sorted(pair)
+        dot.edge(a, b, dir="both", color="red", style="dashed", penwidth="2.5")
+
+    return dot
+
+
+def display_opium_graph():
+    a, b, c, d, e, f, g, y, z = Bools("a b c d e f g y z")
+
+    s = Solver()
+    s.add(
+        DependsOn(a, [b, c, z]),
+        DependsOn(y, z),
+        DependsOn(b, d),
+        DependsOn(c, [Or(d, e), Or(f, g)]),
+        Conflict(d, e),
+        a,
+        z,
+    )
+
+    return display_pkg_struct(s)
+
+
+def display_int_graph():
+    a, b, c, d, e, f, g = Bools("a b c d e f g")
+
+    s = Solver()
+    s.add(
+        DependsOn(a, [b, c, d]),
+        DependsOn(b, e),
+        DependsOn(d, Or(f, g)),
+        Conflict(e, g),
+        a,
+    )
+
+    return display_pkg_solution(s)
+
+
+def pkg_output_string(
+    solver: Solver, *, algo: str = "sha256", digest_size: int = 16
+) -> str:
+    """
+    Stable-ish fingerprint of a Z3 Solver's asserted formulas.
+    - Order independent
+    - Uses Z3's s-expression serialization
+    - Returns hex digest
+
+    algo: 'sha256' (default) or 'blake2b'
+    digest_size: only used for blake2b (bytes)
+
+    Written by ChatGPT
+    """
+    parts = [a.sexpr() for a in solver.assertions()]
+    parts.sort()
+
+    payload = "\n".join(parts).encode("utf-8")
+
+    if algo == "sha256":
+        return hashlib.sha256(payload).hexdigest()
+    elif algo == "blake2b":
+        return hashlib.blake2b(payload, digest_size=digest_size).hexdigest()
+    else:
+        raise ValueError("algo must be 'sha256' or 'blake2b'")
+
+
+### Metamerism
+
+# Generates objects and plots them too
+
+
+# Simulates light with Gaussian distribution
+def gaussian(wl, mu, sigma):
+    return np.exp(-0.5 * ((wl - mu) / sigma) ** 2)
+
+
+# Wavelengths
+wl_min = 380
+wl_max = 700
+wl = np.arange(wl_min, wl_max + 1, 5)  # Wavelengths 5nm apart
+
+
+def generate_illuminant(wl):
+    E = 1.2 * gaussian(wl, 600, 120) + 0.8 * gaussian(  # warm tail
+        wl, 450, 90
+    )  # blue contribution
+    E /= E.max()  # normalize => all values between 0 and 1
+
+    return E
+
+
+def plot_illuminant(wl, E):
+    plt.plot(wl, E, c="orange")
+    plt.xlabel("Wavelength (nm)")
+    plt.ylabel("Relative Power")
+    plt.title("Simulated Illuminant SPD")
+    plt.xticks(np.arange(min(wl), max(wl) + 1, 50))
+    plt.grid(True)
+    plt.show()
+
+
+def generate_reflectant(wl):
+    # Some reflectant, nothing in particular
+    R = 0.3 + 0.4 * gaussian(wl, 520, 60) - 0.2 * gaussian(wl, 450, 30)
+    R = np.clip(R, 0, 1)  # Make sure all values are between 0 and 1
+
+    return R
+
+
+def plot_reflectant(wl, R):
+    plt.plot(wl, R, c="m")
+    plt.xlabel("Wavelength (nm)")
+    plt.ylabel("Relative Power")
+    plt.title("Object's Reflectance SPD")
+    plt.xticks(np.arange(min(wl), max(wl) + 1, 50))
+    plt.grid(True)
+    plt.show()
+
+
+def generate_and_plot_ERL(wl, E, R):
+    L = E * R
+
+    plt.plot(wl, E, c="orange", ls="--")
+    plt.plot(wl, R, c="m", ls="--")
+    plt.plot(wl, L, c="c")
+    plt.legend(["Illuminant", "Reflectant", "Resultant"])
+    plt.xlabel("Wavelength (nm)")
+    plt.ylabel("Relative Power")
+    plt.title("Resultant SPD")
+    plt.xticks(np.arange(min(wl), max(wl) + 1, 50))
+    plt.grid(True)
+    plt.show()
+
+    return L
+
+
+def generate_sensor(wl):
+    # Sensor sensitivities, simplification of the human eye
+    S = np.stack(
+        [
+            0.9 * gaussian(wl, 560, 40),  # L (red)   cone
+            1.0 * gaussian(wl, 530, 35),  # M (green) cone
+            0.7 * gaussian(wl, 420, 25),  # S (blue)  cone
+        ],
+        axis=1,
+    )
+    assert S.shape == (len(wl), 3)
+
+    return S
+
+
+def plot_sensor(wl, S):
+    # Plotting SPD's for the three cones
+    plt.xlabel("Wavelength (nm)")
+    plt.ylabel("Relative Power")
+    plt.title("Sensor Sensitivity SPD")
+    plt.xticks(np.arange(wl_min, wl_max + 1, 50))
+    plt.grid(True)
+
+    colors = "rgb"
+    for i, column in enumerate(S.T):
+        plt.plot(wl, column, c=colors[i])
+        plt.legend(["L (red)", "M (green)", "S (blue)"])
 
     plt.show()
 
@@ -725,3 +1265,42 @@ def draw_chemical_graph(G, edge_colors, centerline_nodes, ax):
     # Draw the graph
     nx.draw(G, pos, with_labels=True, node_size=700,
             node_color='white', edge_color=edge_colors, ax=ax)
+def plot_two_reflectans(wl, R1, R2):
+    # Plotting the objects' reflectance SPD
+    plt.plot(wl, R1, c="m")
+    plt.plot(wl, R2, c="brown")
+    plt.legend(["Object 1 Reflectance", "Object 2 Reflectance"])
+    plt.xlabel("Wavelength (nm)")
+    plt.ylabel("Relative Power")
+    plt.title("Objects' Reflectance SPDs")
+    plt.xticks(np.arange(min(wl), max(wl) + 1, 50))
+    plt.grid(True)
+    plt.show()
+
+
+### Mate Matching
+
+# Stolen + modified from other mating stuff
+
+def split_male_female(s):
+    match = re.match(r"^([A-Za-z]+\d+)([A-Za-z]+\d+)$", s)
+    if match:
+        return match.group(1), match.group(2)
+    else:
+        return s, ""  # if no split point found
+
+
+def print_mate_matching_solution(solution):
+    left_vertices = set({})
+    right_vertices = set({})
+    edges = []
+    matching = []
+    for i in solution:
+        val = solution[i]
+        a, b = split_male_female(str(i))
+        left_vertices.add(a)
+        right_vertices.add(b)
+        edges.append((a, b))
+        if val:
+            matching.append((a, b))
+    draw_bipartite_graph(left_vertices, right_vertices, edges, matching)
