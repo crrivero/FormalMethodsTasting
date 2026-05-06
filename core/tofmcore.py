@@ -700,7 +700,7 @@ def draw_single_matching(m, ax, num_center):
   # Draw graph aligned to grid
   draw_chemical_graph(G, edge_colors, [str(i+1) for i in range(num_center)], ax)
 
-### Written by Gemini ###
+# Written by Gemini
 def draw_chemical_graph(G, edge_colors, centerline_nodes, ax):
     """
     centerline_nodes: a list of nodes to be placed on the y=0 axis.
