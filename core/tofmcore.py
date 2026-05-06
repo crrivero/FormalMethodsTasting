@@ -1265,7 +1265,7 @@ def draw_chemical_graph(G, edge_colors, centerline_nodes, ax):
     # Draw the graph
     nx.draw(G, pos, with_labels=True, node_size=700,
             node_color='white', edge_color=edge_colors, ax=ax)
-def plot_two_reflectans(wl, R1, R2):
+def plot_two_reflectants(wl, R1, R2):
     # Plotting the objects' reflectance SPD
     plt.plot(wl, R1, c="m")
     plt.plot(wl, R2, c="brown")
