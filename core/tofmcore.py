@@ -503,3 +503,225 @@ def bigOmegaPlot( f, g, makeBigOmegaSolver ):
     print( "f(n) =/= Omega(g(n))" )
 
 
+import matplotlib.pyplot as plt
+# written using gemini
+def visualize_truss_solution( f_AB, f_AC, f_BC ):
+
+  # 2. Define geometry
+  joints = {'A': (0, 0), 'B': (3, 0), 'C': (0, 4)}
+  members = [('A', 'B', f_AB), ('A', 'C', f_AC), ('B', 'C', f_BC)]
+
+  # 3. Setup Plot
+  fig, ax = plt.subplots(figsize=(6, 6))
+  ax.set_aspect('equal')
+  ax.axis('off')
+
+  # 4. Plot Members
+  max_force = max(abs(f_AB), abs(f_AC), abs(f_BC))
+  for node1, node2, force in members:
+    x_values = [joints[node1][0], joints[node2][0]]
+    y_values = [joints[node1][1], joints[node2][1]]
+
+    # Color: Blue for Tension (+), Red for Compression (-)
+    color = 'blue' if force > 0 else 'red'
+
+    # Thickness proportional to magnitude
+    thickness = 1 + 5 * (abs(force) / max_force)
+
+    ax.plot(x_values, y_values, color=color, linewidth=thickness, zorder=1)
+
+    # Add force label in the middle of the member
+    mid_x = sum(x_values) / 2
+    mid_y = sum(y_values) / 2
+    ax.text(mid_x, mid_y, f"{abs(force):.1f} N",
+            ha='center', va='center', bbox=dict(facecolor='white', edgecolor='none', alpha=0.7))
+
+  # 5. Plot Joints
+  for name, (x, y) in joints.items():
+    ax.plot(x, y, 'ko', markersize=10, zorder=2) # Black dots for joints
+    ax.text(x - 0.2, y + 0.2, name, fontsize=12, fontweight='bold')
+
+  # 6. Add Custom Legend
+  ax.plot([], [], color='blue', linewidth=3, label='Tension')
+  ax.plot([], [], color='red', linewidth=3, label='Compression')
+  ax.legend(loc='upper right')
+
+  plt.title("Truss Internal Forces Visualization", fontsize=14)
+  plt.show()
+
+
+
+# written using gemini
+def plot_gears(n1, n2, n3, n4):
+    fig, ax = plt.subplots(figsize=(10, 5))
+    
+    # Centers (Stage 1)
+    c1 = (0, 0)
+    r1 = n1 / 2
+    c2 = (r1 + n2/2, 0)
+    r2 = n2 / 2
+    
+    # Centers (Stage 2 - Shaft 2 is shared)
+    c3 = c2
+    r3 = n3 / 2
+    c4 = (c2[0] + r3 + n4/2, 0)
+    r4 = n4 / 2
+    
+    # Draw Pitch Circles
+    gears = [(c1, r1, 'Input (N1)'), (c2, r2, 'N2'), (c3, r3, 'N3'), (c4, r4, 'Output (N4)')]
+    colors = ['#3498db', '#e74c3c', '#f1c40f', '#2ecc71']
+    
+    for i, (pos, rad, label) in enumerate(gears):
+        circle = plt.Circle(pos, rad, color=colors[i], alpha=0.6, label=f"{label}: {int(rad*2)}T")
+        ax.add_artist(circle)
+        
+    ax.set_xlim(-r1 - 5, c4[0] + r4 + 5)
+    ax.set_ylim(-max(r2, r4) - 5, max(r2, r4) + 5)
+    ax.set_aspect('equal')
+    plt.title("Powertrain Layout: Compound Spur Gear Train")
+    plt.legend()
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.show()
+
+
+### Lewis Structures ###
+def draw_lewis_from_model(m):
+    """Converts a model to the format required by draw_lewis_structure"""
+    # List of elements
+    elements = []
+    # List of bond variables
+    bonds = []
+    lone_pairs = []
+
+    # Add element names and lone pairs to the list
+    for d in m.decls():
+        name = d.name()
+        if len(name) == 1 or name[1] == '^':
+            elements.append(name)
+            lone_pairs.append(m[d].as_long())
+
+    # Add bond pair counts
+    for d in m.decls():
+        name = d.name()
+        # Bond Pairs
+        if len(name) > 1 and name[1] != '^':
+            bonds.append((elements.index(name[0]), elements.index(name[1:4]), m[d].as_long()))
+
+    draw_lewis_structure(elements, bonds, lone_pairs)
+
+# Written by Gemini
+def draw_lewis_structure(elements, bonds, lone_pairs):
+    fig, ax = plt.subplots(figsize=(3, 3))
+    ax.set_aspect('equal')
+    ax.axis('off')
+
+    # 1. Coordinate Setup (Circle Layout)
+    n = len(elements)
+    angles = np.linspace(0, 2 * np.pi, n, endpoint=False)
+    pos = {i: np.array([np.cos(a), np.sin(a)]) / 3 for i, a in enumerate(angles)}
+
+    # 2. Draw Bonds with Multi-bond Offsets
+    for idx1, idx2, count in bonds:
+        p1, p2 = pos[idx1], pos[idx2]
+        vec = p2 - p1
+        perp = np.array([-vec[1], vec[0]])
+        perp = perp / np.linalg.norm(perp) * 0.05
+
+        # Offset multi-bonds slightly so they don't overlap
+        offsets = np.linspace(-0.6, 0.6, count) if count > 1 else [0]
+        for opt in offsets:
+            shift = perp * opt
+            ax.plot([p1[0] + shift[0], p2[0] + shift[0]],
+                    [p1[1] + shift[1], p2[1] + shift[1]],
+                    color='black', lw=2, zorder=1)
+
+    # 3. Draw Atoms and Distributed Lone Pairs
+    for i, (el, lp_count) in enumerate(zip(elements, lone_pairs)):
+        x, y = pos[i]
+        ax.text(x, y, el[0], fontsize=28, fontweight='bold', ha='center', va='center',
+                bbox=dict(facecolor='white', edgecolor='none', pad=1.5), zorder=2)
+
+        # Calculate angles to neighbors to find "open" slots
+        neighbor_angles = []
+        for b1, b2, _ in bonds:
+            if b1 == i: neighbor_angles.append(np.arctan2(pos[b2][1] - y, pos[b2][0] - x))
+            if b2 == i: neighbor_angles.append(np.arctan2(pos[b1][1] - y, pos[b1][0] - x))
+
+        # Standard slots: 0, 90, 180, 270 degrees
+        potential_slots = [0, np.pi / 2, np.pi, 3 * np.pi / 2]
+        available_slots = []
+
+        for slot in potential_slots:
+            # Only use slot if it's not pointing toward a bond
+            if not any(abs((slot - na + np.pi) % (2 * np.pi) - np.pi) < 0.5 for na in neighbor_angles):
+                available_slots.append(slot)
+
+        # Draw lone pairs in the best available slots
+        for lp_idx in range(min(lp_count, len(available_slots))):
+            slot_angle = available_slots[lp_idx]
+            dist = 0.1
+            # The two dots of the pair are slightly separated perpendicular to the slot angle
+            dot_gap = 0.03
+            for side in [-1, 1]:
+                dx = x + dist * np.cos(slot_angle) + side * dot_gap * np.sin(slot_angle)
+                dy = y + dist * np.sin(slot_angle) - side * dot_gap * np.cos(slot_angle)
+                ax.scatter(dx, dy, s=40, color='red', zorder=3)  # Red for visibility
+
+    plt.show()
+
+
+### Chemistry Matching and Z-Index ###
+def draw_all_matchings(s, all_sols, num_center):
+  # Draw in a grid with 3 columns
+  rows = (len(all_sols) // 3) + 1
+  fig, axs = plt.subplots(rows,3, figsize=(12,12))
+  axes = axs.flatten()
+
+  for i, sol in enumerate(all_sols):
+    draw_single_matching(sol, axes[i], num_center)
+
+def draw_single_matching(m, ax, num_center):
+  # Create the edges and the matchings from the solution
+  edges = []
+  matching = []
+  for i in m:
+    val = m[i]
+    a = str(i)[3]
+    b = str(i)[4]
+    edges.append((a, b))
+    if val:
+      matching.append((a, b))
+
+  # Create the graph from the edges.
+  G = nx.Graph()
+  G.add_edges_from(sorted(edges)) # Sorting ensures consisten layout of nodes
+  edge_colors = ['red' if e in matching or (e[1], e[0]) in matching else 'black' for e in G.edges()]
+
+  # Draw graph aligned to grid
+  draw_chemical_graph(G, edge_colors, [str(i+1) for i in range(num_center)], ax)
+
+# Written by Gemini
+def draw_chemical_graph(G, edge_colors, centerline_nodes, ax):
+    """
+    centerline_nodes: a list of nodes to be placed on the y=0 axis.
+    """
+    pos = {}
+
+    # 1. Position the centerline nodes
+    for i, node in enumerate(centerline_nodes):
+        pos[node] = (i, 0)
+
+    # 2. Position the children above/below
+    for parent in centerline_nodes:
+        # Find neighbors not already in the centerline
+        children = [n for n in G.neighbors(parent) if n not in centerline_nodes]
+
+        for i, child in enumerate(children):
+            # Alternate: even index above (1), odd index below (-1)
+            x_offset = pos[parent][0]
+            y_offset = 1 if i % 2 == 0 else -1
+            pos[child] = (x_offset, y_offset)
+
+    # Draw the graph
+    nx.draw(G, pos, with_labels=True, node_size=700,
+            node_color='white', edge_color=edge_colors, ax=ax)
