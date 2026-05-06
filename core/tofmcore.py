@@ -582,3 +582,146 @@ def plot_gears(n1, n2, n3, n4):
     plt.legend()
     plt.grid(True, linestyle='--', alpha=0.5)
     plt.show()
+
+
+### Lewis Structures ###
+def draw_lewis_from_model(m):
+    """Converts a model to the format required by draw_lewis_structure"""
+    # List of elements
+    elements = []
+    # List of bond variables
+    bonds = []
+    lone_pairs = []
+
+    # Add element names and lone pairs to the list
+    for d in m.decls():
+        name = d.name()
+        if len(name) == 1 or name[1] == '^':
+            elements.append(name)
+            lone_pairs.append(m[d].as_long())
+
+    # Add bond pair counts
+    for d in m.decls():
+        name = d.name()
+        # Bond Pairs
+        if len(name) > 1 and name[1] != '^':
+            bonds.append((elements.index(name[0]), elements.index(name[1:4]), m[d].as_long()))
+
+    draw_lewis_structure(elements, bonds, lone_pairs)
+
+# Written by Gemini
+def draw_lewis_structure(elements, bonds, lone_pairs):
+    fig, ax = plt.subplots(figsize=(3, 3))
+    ax.set_aspect('equal')
+    ax.axis('off')
+
+    # 1. Coordinate Setup (Circle Layout)
+    n = len(elements)
+    angles = np.linspace(0, 2 * np.pi, n, endpoint=False)
+    pos = {i: np.array([np.cos(a), np.sin(a)]) / 3 for i, a in enumerate(angles)}
+
+    # 2. Draw Bonds with Multi-bond Offsets
+    for idx1, idx2, count in bonds:
+        p1, p2 = pos[idx1], pos[idx2]
+        vec = p2 - p1
+        perp = np.array([-vec[1], vec[0]])
+        perp = perp / np.linalg.norm(perp) * 0.05
+
+        # Offset multi-bonds slightly so they don't overlap
+        offsets = np.linspace(-0.6, 0.6, count) if count > 1 else [0]
+        for opt in offsets:
+            shift = perp * opt
+            ax.plot([p1[0] + shift[0], p2[0] + shift[0]],
+                    [p1[1] + shift[1], p2[1] + shift[1]],
+                    color='black', lw=2, zorder=1)
+
+    # 3. Draw Atoms and Distributed Lone Pairs
+    for i, (el, lp_count) in enumerate(zip(elements, lone_pairs)):
+        x, y = pos[i]
+        ax.text(x, y, el[0], fontsize=28, fontweight='bold', ha='center', va='center',
+                bbox=dict(facecolor='white', edgecolor='none', pad=1.5), zorder=2)
+
+        # Calculate angles to neighbors to find "open" slots
+        neighbor_angles = []
+        for b1, b2, _ in bonds:
+            if b1 == i: neighbor_angles.append(np.arctan2(pos[b2][1] - y, pos[b2][0] - x))
+            if b2 == i: neighbor_angles.append(np.arctan2(pos[b1][1] - y, pos[b1][0] - x))
+
+        # Standard slots: 0, 90, 180, 270 degrees
+        potential_slots = [0, np.pi / 2, np.pi, 3 * np.pi / 2]
+        available_slots = []
+
+        for slot in potential_slots:
+            # Only use slot if it's not pointing toward a bond
+            if not any(abs((slot - na + np.pi) % (2 * np.pi) - np.pi) < 0.5 for na in neighbor_angles):
+                available_slots.append(slot)
+
+        # Draw lone pairs in the best available slots
+        for lp_idx in range(min(lp_count, len(available_slots))):
+            slot_angle = available_slots[lp_idx]
+            dist = 0.1
+            # The two dots of the pair are slightly separated perpendicular to the slot angle
+            dot_gap = 0.03
+            for side in [-1, 1]:
+                dx = x + dist * np.cos(slot_angle) + side * dot_gap * np.sin(slot_angle)
+                dy = y + dist * np.sin(slot_angle) - side * dot_gap * np.cos(slot_angle)
+                ax.scatter(dx, dy, s=40, color='red', zorder=3)  # Red for visibility
+
+    plt.show()
+
+
+### Chemistry Matching and Z-Index ###
+def draw_all_matchings(s, all_sols, num_center):
+  # Draw in a grid with 3 columns
+  rows = (len(all_sols) // 3) + 1
+  fig, axs = plt.subplots(rows,3, figsize=(12,12))
+  axes = axs.flatten()
+
+  for i, sol in enumerate(all_sols):
+    draw_single_matching(sol, axes[i], num_center)
+
+def draw_single_matching(m, ax, num_center):
+  # Create the edges and the matchings from the solution
+  edges = []
+  matching = []
+  for i in m:
+    val = m[i]
+    a = str(i)[3]
+    b = str(i)[4]
+    edges.append((a, b))
+    if val:
+      matching.append((a, b))
+
+  # Create the graph from the edges.
+  G = nx.Graph()
+  G.add_edges_from(sorted(edges)) # Sorting ensures consisten layout of nodes
+  edge_colors = ['red' if e in matching or (e[1], e[0]) in matching else 'black' for e in G.edges()]
+
+  # Draw graph aligned to grid
+  draw_chemical_graph(G, edge_colors, [str(i+1) for i in range(num_center)], ax)
+
+# Written by Gemini
+def draw_chemical_graph(G, edge_colors, centerline_nodes, ax):
+    """
+    centerline_nodes: a list of nodes to be placed on the y=0 axis.
+    """
+    pos = {}
+
+    # 1. Position the centerline nodes
+    for i, node in enumerate(centerline_nodes):
+        pos[node] = (i, 0)
+
+    # 2. Position the children above/below
+    for parent in centerline_nodes:
+        # Find neighbors not already in the centerline
+        children = [n for n in G.neighbors(parent) if n not in centerline_nodes]
+
+        for i, child in enumerate(children):
+            # Alternate: even index above (1), odd index below (-1)
+            x_offset = pos[parent][0]
+            y_offset = 1 if i % 2 == 0 else -1
+            pos[child] = (x_offset, y_offset)
+
+    # Draw the graph
+    nx.draw(G, pos, with_labels=True, node_size=700,
+            node_color='white', edge_color=edge_colors, ax=ax)
