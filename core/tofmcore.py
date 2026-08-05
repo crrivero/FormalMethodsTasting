@@ -1113,26 +1113,22 @@ def pkg_output_string(
 
 # Generates objects and plots them too
 
+import numpy as np
+import matplotlib.pyplot as plt
+
+### Metamerism
+# Generates objects and plots them too
 
 # Simulates light with Gaussian distribution
 def gaussian(wl, mu, sigma):
     return np.exp(-0.5 * ((wl - mu) / sigma) ** 2)
-
-
-# Wavelengths
-wl_min = 380
-wl_max = 700
-wl = np.arange(wl_min, wl_max + 1, 5)  # Wavelengths 5nm apart
-
 
 def generate_illuminant(wl):
     E = 1.2 * gaussian(wl, 600, 120) + 0.8 * gaussian(  # warm tail
         wl, 450, 90
     )  # blue contribution
     E /= E.max()  # normalize => all values between 0 and 1
-
     return E
-
 
 def plot_illuminant(wl, E):
     plt.plot(wl, E, c="orange")
@@ -1143,14 +1139,11 @@ def plot_illuminant(wl, E):
     plt.grid(True)
     plt.show()
 
-
 def generate_reflectant(wl):
     # Some reflectant, nothing in particular
     R = 0.3 + 0.4 * gaussian(wl, 520, 60) - 0.2 * gaussian(wl, 450, 30)
     R = np.clip(R, 0, 1)  # Make sure all values are between 0 and 1
-
     return R
-
 
 def plot_reflectant(wl, R):
     plt.plot(wl, R, c="m")
@@ -1160,7 +1153,6 @@ def plot_reflectant(wl, R):
     plt.xticks(np.arange(min(wl), max(wl) + 1, 50))
     plt.grid(True)
     plt.show()
-
 
 def generate_and_plot_ERL(wl, E, R):
     L = E * R
@@ -1175,9 +1167,7 @@ def generate_and_plot_ERL(wl, E, R):
     plt.xticks(np.arange(min(wl), max(wl) + 1, 50))
     plt.grid(True)
     plt.show()
-
     return L
-
 
 def generate_sensor(wl):
     # Sensor sensitivities, simplification of the human eye
@@ -1190,9 +1180,7 @@ def generate_sensor(wl):
         axis=1,
     )
     assert S.shape == (len(wl), 3)
-
     return S
-
 
 def plot_sensor(wl, S):
     # Plotting SPD's for the three cones
@@ -1207,6 +1195,18 @@ def plot_sensor(wl, S):
         plt.plot(wl, column, c=colors[i])
         plt.legend(["L (red)", "M (green)", "S (blue)"])
 
+    plt.show()
+
+def plot_two_reflectants(wl, R1, R2):
+    # Plotting the objects' reflectance SPD
+    plt.plot(wl, R1, c="m")
+    plt.plot(wl, R2, c="brown")
+    plt.legend(["Object 1 Reflectance", "Object 2 Reflectance"])
+    plt.xlabel("Wavelength (nm)")
+    plt.ylabel("Relative Power")
+    plt.title("Objects' Reflectance SPDs")
+    plt.xticks(np.arange(min(wl), max(wl) + 1, 50))
+    plt.grid(True)
     plt.show()
 
 
@@ -1265,17 +1265,6 @@ def draw_chemical_graph(G, edge_colors, centerline_nodes, ax):
     # Draw the graph
     nx.draw(G, pos, with_labels=True, node_size=700,
             node_color='white', edge_color=edge_colors, ax=ax)
-def plot_two_reflectants(wl, R1, R2):
-    # Plotting the objects' reflectance SPD
-    plt.plot(wl, R1, c="m")
-    plt.plot(wl, R2, c="brown")
-    plt.legend(["Object 1 Reflectance", "Object 2 Reflectance"])
-    plt.xlabel("Wavelength (nm)")
-    plt.ylabel("Relative Power")
-    plt.title("Objects' Reflectance SPDs")
-    plt.xticks(np.arange(min(wl), max(wl) + 1, 50))
-    plt.grid(True)
-    plt.show()
 
 
 ### Mate Matching
