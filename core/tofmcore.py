@@ -1182,7 +1182,7 @@ def generate_sensor(wl):
     assert S.shape == (len(wl), 3)
     return S
 
-def plot_sensor(wl, S):
+def plot_sensor(wl, wl_min, wl_max, S):
     # Plotting SPD's for the three cones
     plt.xlabel("Wavelength (nm)")
     plt.ylabel("Relative Power")
