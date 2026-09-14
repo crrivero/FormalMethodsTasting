@@ -556,33 +556,57 @@ def visualize_truss_solution( f_AB, f_AC, f_BC ):
 
 # written using gemini
 def plot_gears(n1, n2, n3, n4):
-    fig, ax = plt.subplots(figsize=(10, 5))
-    
-    # Centers (Stage 1)
-    c1 = (0, 0)
-    r1 = n1 / 2
-    c2 = (r1 + n2/2, 0)
-    r2 = n2 / 2
-    
-    # Centers (Stage 2 - Shaft 2 is shared)
-    c3 = c2
-    r3 = n3 / 2
-    c4 = (c2[0] + r3 + n4/2, 0)
-    r4 = n4 / 2
-    
-    # Draw Pitch Circles
-    gears = [(c1, r1, 'Input (N1)'), (c2, r2, 'N2'), (c3, r3, 'N3'), (c4, r4, 'Output (N4)')]
-    colors = ['#3498db', '#e74c3c', '#f1c40f', '#2ecc71']
-    
-    for i, (pos, rad, label) in enumerate(gears):
-        circle = plt.Circle(pos, rad, color=colors[i], alpha=0.6, label=f"{label}: {int(rad*2)}T")
-        ax.add_artist(circle)
-        
-    ax.set_xlim(-r1 - 5, c4[0] + r4 + 5)
-    ax.set_ylim(-max(r2, r4) - 5, max(r2, r4) + 5)
+    """Draw a two-stage compound gear train with tooth counts n1..n4.
+
+    Gears N2 and N3 share the intermediate shaft, so the two stages sit in
+    different planes along that shaft. They are drawn on separate rows for that
+    reason: N2 and N4 are both large and would appear to collide if the whole
+    train were flattened into one plane, which is a drawing artefact rather than
+    a design fault. Horizontal shaft positions are to scale, so the gap between
+    each pair of shaft centres really is the sum of the two pitch radii.
+    """
+    r1, r2, r3, r4 = n1/2, n2/2, n3/2, n4/2
+
+    shaft1_x = 0
+    shaft2_x = r1 + r2                 # N1 meshes with N2
+    shaft3_x = shaft2_x + r3 + r4      # N3 meshes with N4
+
+    gap = 0.45*max(n1, n2, n3, n4)
+    stage1_y = 0
+    stage2_y = -(max(r1, r2) + max(r3, r4) + gap)
+
+    fig, ax = plt.subplots(figsize=(11, 8))
+
+    gears = [
+        ((shaft1_x, stage1_y), r1, 'Input (N1)',  '#3498db'),
+        ((shaft2_x, stage1_y), r2, 'N2',          '#e74c3c'),
+        ((shaft2_x, stage2_y), r3, 'N3',          '#f1c40f'),
+        ((shaft3_x, stage2_y), r4, 'Output (N4)', '#2ecc71'),
+    ]
+
+    for pos, rad, label, colour in gears:
+        ax.add_artist(plt.Circle(pos, rad, color=colour, alpha=0.6,
+                                 label=f"{label}: {int(rad*2)}T"))
+        ax.plot([pos[0]], [pos[1]], 'o', color='black', markersize=4)
+
+    # the shaft N2 and N3 share, running between the two planes
+    ax.plot([shaft2_x, shaft2_x], [stage1_y, stage2_y],
+            linestyle='--', color='black', linewidth=1.5)
+    ax.text(shaft2_x + gap/4, (stage1_y + stage2_y)/2, "shared\nintermediate shaft",
+            ha='left', va='center', fontsize=9, color='0.3')
+
+    left = -r1 - gap
+    ax.text(left, stage1_y + max(r1, r2) + gap/2, "Stage 1:  N1 drives N2",
+            ha='left', fontsize=11, color='0.3')
+    ax.text(left, stage2_y + max(r3, r4) + gap/2, "Stage 2:  N3 drives N4",
+            ha='left', fontsize=11, color='0.3')
+
+    ax.set_xlim(-r1 - gap, shaft3_x + r4 + gap)
+    ax.set_ylim(stage2_y - max(r3, r4) - gap, stage1_y + max(r1, r2) + 2*gap)
     ax.set_aspect('equal')
+    ax.set_yticks([])
     plt.title("Powertrain Layout: Compound Spur Gear Train")
-    plt.legend()
+    plt.legend(loc='lower right')
     plt.grid(True, linestyle='--', alpha=0.5)
     plt.show()
 
