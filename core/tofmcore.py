@@ -3,6 +3,7 @@ import re
 import IPython.display
 import hashlib
 from graphviz import Digraph
+from matplotlib import patches
 
 html_to_latex_dict = {
   r"&not;": r" \neg ",
@@ -1081,7 +1082,7 @@ def display_int_graph():
         a,
     )
 
-    return display_pkg_solution(s)
+    return display_pkg_struct(s)
 
 
 def pkg_output_string(
@@ -1215,7 +1216,7 @@ def plot_two_reflectants(wl, R1, R2):
 ### Chemistry Matching and Z-Index ###
 def draw_all_matchings(s, all_sols, num_center):
   # Draw in a grid with 3 columns
-  rows = (len(all_sols) // 3) + 1
+  rows = max(1, -(-len(all_sols) // 3)) # ceiling division, so 9 solutions give 3 rows and not 4
   fig, axs = plt.subplots(rows,3, figsize=(12,12))
   axes = axs.flatten()
 
@@ -1295,3 +1296,262 @@ def print_mate_matching_solution(solution):
         if val:
             matching.append((a, b))
     draw_bipartite_graph(left_vertices, right_vertices, edges, matching)
+
+
+### Physics: series approximations for transcendental functions ###
+# Z3 has no sine, cosine or exponential, so we pin an auxiliary Z3 variable to a
+# truncated Taylor series instead. Each of these adds one constraint to `s` saying
+# that `y` is within 10**(-n) of the series for the corresponding function of `x`.
+# Larger n is more accurate and slower; n=10 is a reasonable default.
+
+def Cos(x, y, s, n=10):
+  # 1 - x**2/2 + x**4/(4*3*2) - ...
+  terms = [1]
+  for i in range(2, n*2, 2):
+    terms.append(x**(i)/math.factorial(i))
+    if i % 4 == 2:
+      terms[-1] = -1*terms[-1]
+
+  s.add(Abs(y - sum(terms)) < 10**(-n))
+
+def Sin(x, y, s, n=10):
+  # x - x**3/(3*2) + x**5/(5*4*3*2) - ...
+  terms = []
+  for i in range(0, n*2, 2):
+    terms.append(x**(i+1)/math.factorial(i+1))
+    if i % 4 == 2:
+      terms[-1] = -1*terms[-1]
+
+  s.add(Abs(y - sum(terms)) < 10**(-n))
+
+def Exp(x, y, s, n=10):
+  # 1 + x + x**2/2 + x**3/(3*2) + ...
+  terms = [1]
+  for i in range(1, n):
+    terms.append(x**(i)/math.factorial(i))
+
+  s.add(Abs(y - sum(terms)) < 10**(-n))
+
+
+### Physics: statics ###
+
+def cross(a, b):
+  """z-component of the cross product of two vectors in the plane.
+
+  Each argument is a two-element sequence [x, y] of Z3 expressions or numbers.
+  For a position vector r and a force F, cross(r, F) is the torque about the
+  origin.
+  """
+  a1, a2 = a
+  b1, b2 = b
+  return a1*b2 - a2*b1
+
+
+### Physics: projectile motion ###
+
+def draw_projectile(pm, num_points=200, figsize=(8,5)):
+  """Plot the trajectory described by a solved ProjectileMotion object.
+
+  Expects `pm.solver` to be satisfiable and `pm` to carry the Z3 variables
+  x_0, y_0, v_x0, v_y0 and g. The curve is drawn from launch until the
+  projectile returns to y = 0, with the solved point (pm.x, pm.y) marked.
+  """
+  if pm.solver.check() != sat:
+    print("The solver is unsatisfiable, so there is no trajectory to draw.")
+    return
+
+  m = pm.solver.model()
+
+  def val(v):
+    if m[v] is None:
+      return None
+    return _z3_value_to_float(m[v])
+
+  x0, y0 = val(pm.x_0), val(pm.y_0)
+  vx0, vy0 = val(pm.v_x0), val(pm.v_y0)
+  g = val(pm.g)
+
+  if None in (x0, y0, vx0, vy0, g):
+    print("The model does not fix the launch conditions, so there is no single trajectory to draw.")
+    return
+
+  # time at which the projectile comes back down to y = 0
+  disc = vy0**2 + 2*g*y0
+  t_end = (vy0 + math.sqrt(disc))/g if disc >= 0 else 2*vy0/g
+  t_end = max(t_end, 1e-6)
+
+  ts = [t_end*i/num_points for i in range(num_points+1)]
+  xs = [x0 + vx0*t for t in ts]
+  ys = [y0 + vy0*t - g*t*t/2 for t in ts]
+
+  fig, ax = plt.subplots(figsize=figsize)
+  ax.plot(xs, ys, color="tab:blue", label="trajectory")
+  ax.axhline(0, color="black", linewidth=1)
+  ax.plot([x0], [y0], "o", color="tab:green", label="launch")
+
+  xt, yt = val(pm.x), val(pm.y)
+  if xt is not None and yt is not None:
+    ax.plot([xt], [yt], "o", color="tab:red", label="solution")
+    ax.annotate("(%.2f, %.2f)" % (xt, yt), (xt, yt),
+                textcoords="offset points", xytext=(8, 8), color="tab:red")
+
+  ax.set_xlabel("horizontal distance (m)")
+  ax.set_ylabel("height (m)")
+  ax.set_title("Projectile trajectory")
+  ax.legend()
+  ax.grid(alpha=0.3)
+  plt.show()
+
+
+### Physics: collisions ###
+
+def draw_collision(m1, m2, v1i, v2i, v1f, v2f, figsize=(9,4)):
+  """Draw two carts before and after a collision.
+
+  Each argument may be a Python number or a value read out of a Z3 model. Cart
+  width is proportional to mass and the arrow above each cart shows its velocity;
+  a cart with zero velocity is drawn without an arrow.
+  """
+  m1, m2, v1i, v2i, v1f, v2f = [
+      v if isinstance(v, (int, float)) else _z3_value_to_float(v)
+      for v in (m1, m2, v1i, v2i, v1f, v2f)]
+
+  fig, axes = plt.subplots(2, 1, figsize=figsize, sharex=True)
+  speeds = [abs(v) for v in (v1i, v2i, v1f, v2f)]
+  scale = max(speeds) if max(speeds) > 0 else 1.0
+  masses = [m1, m2]
+  widths = [0.6 + 0.6*mass/max(masses) for mass in masses]
+
+  for ax, (u1, u2), label in zip(axes, [(v1i, v2i), (v1f, v2f)],
+                                 ["Before", "After"]):
+    for centre, width, mass, u, colour, name in [
+        (1.0, widths[0], m1, u1, "tab:blue", "cart 1"),
+        (4.0, widths[1], m2, u2, "tab:orange", "cart 2")]:
+      ax.add_patch(plt.Rectangle((centre - width/2, 0), width, 0.6,
+                                 facecolor=colour, edgecolor="black", alpha=0.75))
+      ax.text(centre, 0.3, "%g kg" % mass, ha="center", va="center", color="white")
+      if abs(u) > 1e-9:
+        ax.annotate("", xy=(centre + 1.1*u/scale, 0.9), xytext=(centre, 0.9),
+                    arrowprops=dict(arrowstyle="-|>", color=colour, linewidth=2))
+      ax.text(centre, 1.15, "%.3g m/s" % u, ha="center", color=colour)
+
+    ax.set_xlim(-1.5, 6.5)
+    ax.set_ylim(-0.1, 1.5)
+    ax.set_yticks([])
+    ax.set_ylabel(label, rotation=0, ha="right", va="center")
+    ax.axhline(0, color="black", linewidth=1)
+    for side in ("top", "right", "left"):
+      ax.spines[side].set_visible(False)
+
+  axes[1].set_xticks([])
+  axes[1].spines["bottom"].set_visible(False)
+  plt.tight_layout()
+  plt.show()
+
+
+### Physics: statics diagrams ###
+
+def draw_beam(model, positions, forces, labels=None, figsize=(9,4)):
+  """Draw a horizontal beam with every force on it shown as an arrow.
+
+  `positions` and `forces` are matching lists of [x, y] pairs of Z3 expressions,
+  exactly as they are built in the notebook; `model` is the Z3 model to read their
+  values out of. Arrows pointing up are drawn in green, arrows pointing down in
+  red, and each is labelled with its magnitude. `labels` is an optional list of
+  names, one per force.
+  """
+  def val(expr):
+    v = model.eval(expr, model_completion=True)
+    return _z3_value_to_float(v)
+
+  xs = [val(p[0]) for p in positions]
+  ys = [val(p[1]) for p in positions]
+  fxs = [val(f[0]) for f in forces]
+  fys = [val(f[1]) for f in forces]
+
+  if labels is None:
+    labels = ["" for _ in positions]
+
+  span = max(xs) - min(xs)
+  span = span if span > 0 else 1.0
+  biggest = max([abs(f) for f in fys] + [abs(f) for f in fxs] + [1.0])
+  unit = 0.35*span/biggest # arrow length per newton
+
+  fig, ax = plt.subplots(figsize=figsize)
+
+  # the beam itself
+  ax.add_patch(plt.Rectangle((min(xs), -0.02*span), span, 0.04*span,
+                             facecolor="0.75", edgecolor="black"))
+
+  for x, y, fx, fy, name in zip(xs, ys, fxs, fys, labels):
+    magnitude = math.hypot(fx, fy)
+    if magnitude < 1e-9:
+      ax.plot([x], [y], "o", color="black", markersize=4)
+      continue
+    colour = "tab:green" if fy > 0 else "tab:red"
+    ax.annotate("", xy=(x + fx*unit, y + fy*unit), xytext=(x, y),
+                arrowprops=dict(arrowstyle="-|>", color=colour, linewidth=2))
+    text = "%.4g N" % magnitude
+    if name:
+      text = "%s = %s" % (name, text)
+    ax.text(x + fx*unit, y + fy*unit + (0.05*span if fy > 0 else -0.05*span),
+            text, ha="center",
+            va="bottom" if fy > 0 else "top", color=colour)
+    ax.plot([x], [y], "o", color="black", markersize=4)
+
+  # position labels, on their own line below everything else
+  tips = [y + fy*unit for y, fy in zip(ys, fys)]
+  baseline = min(tips + ys) - 0.18*span
+  for x, y in zip(xs, ys):
+    ax.text(x, baseline, "x = %g" % x, ha="center", va="top", color="0.35")
+
+  reach = 0.35*span + 0.25*span
+  ax.set_xlim(min(xs) - 0.3*span, max(xs) + 0.3*span)
+  ax.set_ylim(baseline - 0.25*span, max(ys) + reach)
+  ax.set_aspect("equal", adjustable="box")
+  ax.axis("off")
+  ax.set_title("Forces on the beam")
+  plt.show()
+
+
+### Graphs: isomorphism ###
+
+def plot_isomorphism(G, H, f, m, G_pos=None, H_pos=None):
+  """Draw two graphs side by side with the isomorphism between them.
+
+  `f` is the Z3 function returned by the notebook's find_isomorphism and `m` is a
+  model of the solver it was built from. Each node of G is joined to its image in H
+  by a dashed blue arrow. Layouts default to circular.
+  """
+  if G_pos == None:
+    G_pos = nx.circular_layout(G)
+  if H_pos == None:
+    H_pos = nx.circular_layout(H)
+
+  x_max = max(list(G_pos.values()), key=lambda v: v[0])[0]
+  x_min = min(list(H_pos.values()), key=lambda v: v[0])[0]
+
+  right_offset = (x_max - x_min) + 1
+  for h, (x, y) in H_pos.items():
+    H_pos[h] = (x+right_offset, y)
+
+  nx.draw(G, with_labels=True, pos=G_pos)
+  nx.draw(H, with_labels=True, pos=H_pos)
+
+  arrows = []
+  for g in G.nodes():
+    h = m.eval(f(g)).as_long()
+    h_pos = H_pos[h]
+    g_pos = G_pos[g]
+    arrow = patches.FancyArrowPatch(g_pos, h_pos, arrowstyle="-|>",
+                                    linestyle=(0, (6, 4)),
+                                    color="blue",
+                                    connectionstyle="arc3,rad=-0.25",
+                                    shrinkA=10, shrinkB=10,
+                                    mutation_scale=20)
+    arrows.append(arrow)
+
+  for arrow in arrows:
+    plt.gca().add_patch(arrow)
+
+  plt.show()
