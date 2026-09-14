@@ -549,7 +549,9 @@ def visualize_truss_solution( f_AB, f_AC, f_BC ):
   ax.plot([], [], color='red', linewidth=3, label='Compression')
   ax.legend(loc='upper right')
 
-  plt.title("Truss Internal Forces Visualization", fontsize=14)
+  # leave room above the highest joint so the title does not sit on its label
+  ax.margins(0.18)
+  ax.set_title("Truss Internal Forces Visualization", fontsize=14, pad=18)
   plt.show()
 
 
