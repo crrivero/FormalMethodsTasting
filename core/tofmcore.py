@@ -1,6 +1,8 @@
 from z3 import *
 import re
 import IPython.display
+import hashlib
+from graphviz import Digraph
 
 html_to_latex_dict = {
   r"&not;": r" \neg ",
