@@ -3,12 +3,12 @@ We aim to improve formal methods exposure by developing self-contained Jupyter n
 
 You can find notebooks for the following disciplines. Each folder has its own README describing every notebook it contains, what the student is asked to write, and which part of the Z3 primer the notebook assumes.
 
-+ [For computer scientists](For%20computer%20scientists/README.md) — computer organization, databases, algorithm analysis, theory, artificial intelligence, introductory programming
-+ [For engineers](For%20engineers/README.md) — computer, mechanical, electrical, and optical engineering
-+ [For physicists](For%20physicists/README.md) — mechanics, electricity, optics
-+ [For chemical engineers](For%20chemical%20engineers/README.md) — reaction stoichiometry, molecular structure
-+ [For life scientists](For%20life%20scientists/README.md) — molecular biology, systems biology, population genetics
-+ [For mathematicians](For%20mathematicians/README.md) — number theory, graph theory
++ [For computer scientists](For%20computer%20scientists/) — computer organization, databases, algorithm analysis, theory, artificial intelligence, introductory programming
++ [For engineers](For%20engineers/) — computer, mechanical, electrical, and optical engineering
++ [For physicists](For%20physicists/) — mechanics, electricity, optics
++ [For chemical engineers](For%20chemical%20engineers/) — reaction stoichiometry, molecular structure
++ [For life scientists](For%20life%20scientists/) — molecular biology, systems biology, population genetics
++ [For mathematicians](For%20mathematicians/) — number theory, graph theory
 
 A few notebooks suit more than one audience and appear in more than one folder; those copies are identical, and each folder's README says so.
 
